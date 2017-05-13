@@ -134,7 +134,78 @@ $ db.autos.find({'modelyears':{'$all':[1966,1967,1968]}})
 ```
 ### Data Aggregation
 
-- 
+Similar to the GROUP BY in SQL
+1. $group: Use the $group to group by a specified key, specify the group by key in the _id field. 
+```
+% db.movie.aggregate([{$group:{'_id':'$directed_by'}}])
+# Output: {'_id': 'David Fincher'}
+          {'_id': 'Robert Zemeckis'}
+          
+$ db.movie.aggregate([{$group:{'_id': '$directed_by', 'num_movie':{$sum:1}}}])
+# Output: {'_id': 'David Fincher', 'num_movie': 2 }
+          {'_id': 'Robert Zemeckis', 'num_movie': 1 }
+** example 1:
+$ db.movie.aggregate([{$group:{'_id': '$directed_by', 'num_movie':{$avg:$likes}}}])
+** example 2:
+$ db.tweets.aggregate([
+     {'$group': {'_id':'$user.screen_name', 'count':{'$sum':1}}},
+     {'$sort': {'count': -1}}])  # decendenting order
+```
+2. $match: Use the $match stage to filter documents.
+```
+db.restaurants.aggregate(
+   [
+     { $match: { "borough": "Queens", "cuisine": "Brazilian" } },
+     { $group: { "_id": "$address.zipcode" , "count": { $sum: 1 } } }
+   ]
+)   # $match as the filter to select certian documents then $group 
+# Output:
+{ "_id" : "11368", "count" : 1 }
+{ "_id" : "11106", "count" : 3 }
+{ "_id" : "11377", "count" : 1 }
+{ "_id" : "11103", "count" : 1 }
+{ "_id" : "11101", "count" : 2 }
+```
+3. $project: to do the math and project to be seen
+```
+# Question: Who has the highest followers to friends ratio?
+db.tweets.aggregate([
+    {'$match': { 'user.friends_count': { '$gt': 0},
+                 'user.followers_count':{'$gt':0}}},
+    {'$project': {'ratio': {'$divide': ['$user.followers_count', 
+                                        'user.friends_count']},
+                            'sreen_name': '$user.screen_name'}},
+    {'$sort': { 'ratio': -1 }},
+    {'$limit': 1 }]
+)
+```
+4. $unwind -- Use to output a document for each element in the sizes array
+```
+{
+        "_id" : 1,
+        "shirt" : "Half Sleeve",
+        "sizes" : [
+                "medium",
+                "XL",
+                "free"
+        ]
+}
+
+$ db.test1.aggregate( [ {'$unwind': '$size'} ] )
+Output:
+{ "_id" : 1, "shirt" : "Half Sleeve", "sizes" : "medium" }
+{ "_id" : 1, "shirt" : "Half Sleeve", "sizes" : "XL" }
+{ "_id" : 1, "shirt" : "Half Sleeve", "sizes" : "free" }
+
+# Question: who included the most user mentions in their tweets?
+$ db.tweets.aggregate([
+  {'$unwind':'$entities.user_mentions'},
+  {'$group': { '_id': '$user.screen_name',
+               'count': {'$sum': 1 }}},
+  {'$sort': { 'count' : -1 }},
+  {'$limit': 1 } ] )
+```
+
 
 
 
