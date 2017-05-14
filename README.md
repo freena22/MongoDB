@@ -1,4 +1,4 @@
-# MongoDB Basic Tutorials 
+# MongoDB Basic Tutorial
 
 Key Terms:
   - Document: a record in MongoDB with JSON format, similar to 'row' in SQL
@@ -15,9 +15,9 @@ Why Mongo DB?
 
 ### MongoDB Shell (mongo)
 
-Import Json Dataset:
+Import JSON Dataset:
   - run a mongod 
-```
+```sh
 $ mongoimport -d databasename -c collectionname --file stocks.json
 ```
 Use Mongo Shell:
@@ -28,6 +28,7 @@ $ ./mongo
 > use test    # swithced to db test
 > db.createCollection('test1')  # return {'ok':1} 
 > db.test1.drop()   # delete the collection - test1
+> db.dropDatabase()  # use current database first then delete it
 ```
 
 ### Insert Data 
@@ -59,8 +60,9 @@ OR in Pymongo, create a dict then insert the dict
 ```
 
 ### Find or Query Data
+Sytax: db.collection.find(query,projection)
 
-```
+```sh
 $ db.test2.find().pretty()   # find all documents
 $ db.test2.find({'cuisine':'Italian'}).pretty()  # find specify conditions
 # find by a field in an embedded document
@@ -70,13 +72,13 @@ $ db.test2.findOne()  # find one document
 
 Specify Conditions with Operators -- {<field1>:{<operator1>:<value1>}}
 
-```
+```sh
 $ db.test2.find({'address.building':{'$gt':200}}  # greataer than $gt
 $ db.test2.find({address.zipcode':{'$lt':22022}}  # less than $lt
 # Others: $gte/$lte/$ne
 ```
 Combine Conditions:
-```
+```sh
 $ db.test2.find({'cuisine':'Italian','address.zipcode':'12222'}) # logic AND
 $ db.test2.find(
      {$or: [{'cuisine':'Italian','address.zipcode':'12222'}]}
@@ -85,26 +87,26 @@ $ db.test2.find().sort({'cuisine': 1 ,'address.zipcode': 1})
 # sorted first by the cuisine field in ascending order, then by the zipcode
 ```
 Projection Parameter:
-```
+```sh
 $ db.test2.find({'cuisine':'Italian'},{"name": 1, restaurant_id": 1, '_id: 0}
 # only show 'name' and 'restaurant_id' 
 ```
 
 ### Update Data
-```
+```sh
 $ db.test2.update({"cuisine" : "Italian"},{$set:{'name':'luka'}}).pretty()
 # update defined docuemnt with second parameter
 ```
 By default, the update() method updates a single document. To update multiple documents, use the 'multi:True' ...
-```
+```sh
 $ db.test2.update(
      {'address.zipcode':'10012'},
      {$set:{'cuisine':'not decided'}},
-     {multi : true}
+     {multi : true}  # update all matched
  )
 ```
 ### Remove Data
-```
+```sh
 # Remove All documents that match a condition
 $ db.test1.remove({'name':'luka'})
 # Limit the remove operation to only one of the matching documents
@@ -116,7 +118,7 @@ $ db.test1.remove({})
 
 
 1. $exists:0 -- fields with no values in them
-```
+```sh
 $ db.test1.find({'name':'luka'},{'$exists': 0}}).count()
 $ db.test1.find(
      {'population': {'$gt':25000}},
@@ -124,19 +126,26 @@ $ db.test1.find(
   )     # find the operation with values 
 ```
 2. regular expression -- $regex
-```
+```sh
 $ db.test1.find({'name': {'%regex':'[Ll]uka'}})
 ```
 3. in and all 
-```
+```sh
 $ db.autos.find({'modelyears':{'$in':[1966,1967,1968]}})
 $ db.autos.find({'modelyears':{'$all':[1966,1967,1968]}})
 ```
+4. limit() & skip()
+```sh
+# Output limit numbers of documents
+$ db.test1.find({'name':'luka'}).limit(2)
+# skip the first documents
+$ db.test1.find({'name':'luka'}).skip(5)
+
 ### Data Aggregation
 
 Similar to the GROUP BY in SQL
 1. $group: Use the $group to group by a specified key, specify the group by key in the _id field. 
-```
+```sh
 % db.movie.aggregate([{$group:{'_id':'$directed_by'}}])
 # Output: {'_id': 'David Fincher'}
           {'_id': 'Robert Zemeckis'}
@@ -152,7 +161,7 @@ $ db.tweets.aggregate([
      {'$sort': {'count': -1}}])  # decendenting order
 ```
 2. $match: Use the $match stage to filter documents.
-```
+```sh
 db.restaurants.aggregate(
    [
      { $match: { "borough": "Queens", "cuisine": "Brazilian" } },
@@ -167,7 +176,7 @@ db.restaurants.aggregate(
 { "_id" : "11101", "count" : 2 }
 ```
 3. $project: to do the math and project to be seen
-```
+```sh
 # Question: Who has the highest followers to friends ratio?
 db.tweets.aggregate([
     {'$match': { 'user.friends_count': { '$gt': 0},
@@ -180,7 +189,7 @@ db.tweets.aggregate([
 )
 ```
 4. $unwind -- Use to output a document for each element in the sizes array
-```
+```sh
 {
         "_id" : 1,
         "shirt" : "Half Sleeve",
@@ -205,6 +214,33 @@ $ db.tweets.aggregate([
   {'$sort': { 'count' : -1 }},
   {'$limit': 1 } ] )
 ```
+### Indexes
+Indexes can support the efficient execution of queries. Without indexes, MongoDB must perform a collection scan (scan every document in a collection). If an appropriate index exists for a query, MongoDB use the index (B tree) to limit the search times.
+- createIndex(), specify 1 for ascending index type, -1 for descending index
+- createIndex() only creates an index if the index does not exist.
+```sh
+$ db.restaurants.createIndex({'cuisine': 1})
+# Output:
+{
+	"createdCollectionAutomatically" : false,
+	"numIndexesBefore" : 1,
+	"numIndexesAfter" : 2,
+	"ok" : 1
+}
+# Create a compound index
+
+$ db.restaurants.createIndex({'cuisine': 1, 'address.zipcode': -1 })
+# Output:
+{
+	"createdCollectionAutomatically" : false,
+	"numIndexesBefore" : 2,
+	"numIndexesAfter" : 3,
+	"ok" : 1
+}
+
+
+    
+
 
 
 
