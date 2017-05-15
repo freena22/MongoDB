@@ -21,7 +21,7 @@ Import JSON Dataset:
 $ mongoimport -d databasename -c collectionname --file stocks.json
 ```
 Use Mongo Shell:
-```
+```sh
 $ ./mongo
 > show dbs    # show the databases
 > show collections  # show the collection names under current database
@@ -140,27 +140,15 @@ $ db.autos.find({'modelyears':{'$all':[1966,1967,1968]}})
 $ db.test1.find({'name':'luka'}).limit(2)
 # skip the first documents
 $ db.test1.find({'name':'luka'}).skip(5)
-
-### Data Aggregation
-
-Similar to the GROUP BY in SQL
-1. $group: Use the $group to group by a specified key, specify the group by key in the _id field. 
-```sh
-% db.movie.aggregate([{$group:{'_id':'$directed_by'}}])
-# Output: {'_id': 'David Fincher'}
-          {'_id': 'Robert Zemeckis'}
-          
-$ db.movie.aggregate([{$group:{'_id': '$directed_by', 'num_movie':{$sum:1}}}])
-# Output: {'_id': 'David Fincher', 'num_movie': 2 }
-          {'_id': 'Robert Zemeckis', 'num_movie': 1 }
-** example 1:
-$ db.movie.aggregate([{$group:{'_id': '$directed_by', 'num_movie':{$avg:$likes}}}])
-** example 2:
-$ db.tweets.aggregate([
-     {'$group': {'_id':'$user.screen_name', 'count':{'$sum':1}}},
-     {'$sort': {'count': -1}}])  # decendenting order
 ```
-2. $match: Use the $match stage to filter documents.
+### Data Aggregation
+#####  1. Aggregation Pipeline:
+
+The MongoDB aggregation pipeline consists of stages. Each stage transforms the documents as they pass through the pipeline. 
+##### Stages: $match -- $group -- $sort -- $project
+
+1. $match: Use the $match stage to filter documents.
+2. $group: Use the $group to group by a specified key, specify the group by key in the _id field. 
 ```sh
 db.restaurants.aggregate(
    [
@@ -175,7 +163,24 @@ db.restaurants.aggregate(
 { "_id" : "11103", "count" : 1 }
 { "_id" : "11101", "count" : 2 }
 ```
-3. $project: to do the math and project to be seen
+```sh
+% db.movie.aggregate([{$group:{'_id':'$directed_by'}}])
+# Output: {'_id': 'David Fincher'}
+          {'_id': 'Robert Zemeckis'}
+          
+$ db.movie.aggregate([{$group:{'_id': '$directed_by', 'num_movie':{$sum:1}}}])
+# Output: {'_id': 'David Fincher', 'num_movie': 2 }
+          {'_id': 'Robert Zemeckis', 'num_movie': 1 }
+** $avg:
+$ db.movie.aggregate([{$group:{'_id': '$directed_by', 'num_movie':{$avg:$likes}}}])
+```
+3. $sort: 1 for ascending/-1 for decendenting 
+```sh
+$ db.tweets.aggregate([
+     {'$group': {'_id':'$user.screen_name', 'count':{'$sum':1}}},
+     {'$sort': {'count': -1}}])  # decendenting order
+```
+4. $project: create the output structure
 ```sh
 # Question: Who has the highest followers to friends ratio?
 db.tweets.aggregate([
@@ -188,7 +193,10 @@ db.tweets.aggregate([
     {'$limit': 1 }]
 )
 ```
-4. $unwind -- Use to output a document for each element in the sizes array
+#####  2. Other Aggregation Functions:
+
+(1) $unwind -- duplicates each document in the pipeline, once per array element
+
 ```sh
 {
         "_id" : 1,
@@ -214,6 +222,33 @@ $ db.tweets.aggregate([
   {'$sort': { 'count' : -1 }},
   {'$limit': 1 } ] )
 ```
+(2) $push: appends a specified value to an array.
+If the mentioned field is absent in the document to update, the $push operator add it as a new field and includes mentioned value as its element. If the updating field is not an array type field the operation failed.
+```sh
+# Append a Value to an Array
+$ db.students.update(
+   { _id: 1 },
+   { $push: { scores: 89 } }
+)
+# Append Multiple Values to an Array
+$ db.students.update(
+   { name: "joe" },
+   { $push: { scores: { $each: [ 90, 92, 85 ] } } }
+)
+```
+(3) $addToSet: adds a value to an array unless the value is already present, in which case $addToSet does nothing to that array.
+```sh
+{ _id: 2, item: "cable", tags: [ "electronics", "supplies" ] }
+$ db.inventory.update(
+   { _id: 2 },
+   { $addToSet: { tags: { $each: [ "camera", "electronics", "accessories" ] } } })
+# Output:
+{
+  _id: 2,
+  item: "cable",
+  tags: [ "electronics", "supplies", "camera", "accessories" ]
+}
+```
 ### Indexes
 Indexes can support the efficient execution of queries. Without indexes, MongoDB must perform a collection scan (scan every document in a collection). If an appropriate index exists for a query, MongoDB use the index (B tree) to limit the search times.
 - createIndex(), specify 1 for ascending index type, -1 for descending index
@@ -237,12 +272,59 @@ $ db.restaurants.createIndex({'cuisine': 1, 'address.zipcode': -1 })
 	"numIndexesAfter" : 3,
 	"ok" : 1
 }
+```
+- Geospatial indexes
+step1: location [x,y]
+step2: createindex ( { 'location': ...})
+step3: $near
+```sh
+$ db.nodes.find( { 'loc': { '$near': [41.94, -87.65]}, 'tg': {'$exists': 1 })
+```
+### Atomic Operation
+If a document has hundred fields the update statement will either update all the fields or none, hence maintaining atomicity at the document-level.
+```sh
+# Consider the following products document −
+{
+   "_id":1,
+   "product_name": "Samsung S3",
+   "category": "mobiles",
+   "product_total": 5,
+   "product_available": 3,
+   "product_bought_by": [
+      {
+         "customer": "john",
+         "date": "7-Jan-2014"
+      },
+      {
+         "customer": "mark",
+         "date": "8-Jan-2014"
+      }
+   ]
+}
+# findAndModify() method to searches and updates the document in the same go
+$ >db.products.findAndModify({ 
+   query:{_id:2,product_available:{$gt:0}}, 
+   update:{ 
+      $inc:{product_available:-1}, 
+      $push:{product_bought_by:{customer:"rob",date:"9-Jan-2014"}} 
+   }})
+# whenever a new customer buys the product, it will first check if the product is still available using 'product_available' field. If available, we will reduce the value of product_available field as well as insert the new customer's embedded document in the 'product_bought_by' field.
+```
+#### Common Atomic Operation commands
+```sh
+$set: {$set : { field : value}} -- 'to set a value for updating'
+$unset: {$unset : { field : 1}} -- 'to delete a value'
+$inc: {$inc: { filed : value}} -- 'increments a field by a specified value'
+($ db.movie.update({title:'Seven'},{$set:{likes:2}}) # add 2 more liles 
+$push: {$push: { field: value}} -- 'appends a specified value to an array'
+$pushAll: {$pushAll: { field: value_array}} -- 'append multiple values to an array'
+$rename: { old_field_name : new_field_name }} -- 'rename the field name'
+```
 
 
-    
+#### Reference
 
-
-
-
-
-
+1. [Getting Started with MongoDB (MongoDB Shell Edition)](https://docs.mongodb.com/getting-started/shell/)
+2. [w3resource-MongoDB Tutorial](http://www.w3resource.com/mongodb/introduction-mongodb.php)
+3.  [Udacity --Data Wrangling with MongoDB](https://www.udacity.com/course/data-wrangling-with-mongodb--ud032)
+4. (https://github.com/StevenSLXie/Tutorials-for-Web-Developers/blob/master/MongoDB%20极简实践入门.md)
